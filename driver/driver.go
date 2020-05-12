@@ -24,22 +24,23 @@ import (
 	. "github.com/choppsv1/p2p-network-driver/logging" // nolint
 	"github.com/docker/go-plugins-helpers/network"
 	"math/bits"
+	"os"
+	"path/filepath"
 	"sync"
 )
 
 type bitArray uint
 
 type p2pEndpoint struct {
-	id  string
-	ord uint
-	n   *p2pNetwork
-	i   *network.EndpointInterface
+	ID  string                     `json:"endpoint-id"`
+	Ord uint                       `json:"ordinal"`
+	I   *network.EndpointInterface `json:"interface,omitempty"`
 }
 
 type p2pNetwork struct {
-	id        string
-	ord       uint
-	endpoints map[string]*p2pEndpoint
+	ID        string `json:"network-id"`
+	Ord       uint   `json:"ordinal"`
+	Endpoints map[string]*p2pEndpoint
 }
 
 type driver struct {
@@ -62,15 +63,12 @@ func findFirstFreeBit(b bitArray) int {
 }
 
 func Init() (*driver, error) {
-	driver := &driver{
+	d := &driver{
 		networks: make(map[string]*p2pNetwork),
 	}
-	return driver, nil
-}
-
-func (d *driver) AllocateNetwork(r *network.AllocateNetworkRequest) (*network.AllocateNetworkResponse, error) {
-	Trace("AllocateNetwork(%+v)", r)
-	return nil, nil
+	_ = os.Mkdir(stateDir, 0755)
+	d.loadNetworks()
+	return d, nil
 }
 
 // Gets called when docker creates a network
@@ -88,11 +86,18 @@ func (d *driver) CreateNetwork(r *network.CreateNetworkRequest) error {
 
 	Debug("Creating network: p2p%d: %s", ord, r.NetworkID)
 
-	d.networks[r.NetworkID] = &p2pNetwork{
-		id:        r.NetworkID,
-		ord:       uint(ord),
-		endpoints: make(map[string]*p2pEndpoint),
+	n := &p2pNetwork{
+		ID:        r.NetworkID,
+		Ord:       uint(ord),
+		Endpoints: make(map[string]*p2pEndpoint),
 	}
+
+	if err := n.saveNetworkState(); err != nil {
+		return errFmt("Saving state for network %s", n.ID)
+	}
+
+	d.alloc |= (1 << ord)
+	d.networks[r.NetworkID] = n
 
 	return nil
 }
@@ -106,13 +111,15 @@ func (d *driver) DeleteNetwork(r *network.DeleteNetworkRequest) error {
 		return errFmt("Network %s does not exist", r.NetworkID)
 	}
 
-	if count := len(n.endpoints); count != 0 {
-		return errFmt("Network %s still has %d endpoints", n.id, count)
+	if count := len(n.Endpoints); count != 0 {
+		return errFmt("Network %s still has %d endpoints", n.ID, count)
 	}
 
-	Debug("Deleting network: p2p%d: %s", n.ord, n.id)
-	d.alloc &= ^(1 << n.ord)
-	delete(d.networks, n.id)
+	Debug("Deleting network: p2p%d: %s", n.Ord, n.ID)
+	d.alloc &= ^(1 << n.Ord)
+	delete(d.networks, n.ID)
+
+	os.Remove(filepath.Join(stateDir, n.ID))
 	return nil
 }
 
@@ -124,23 +131,29 @@ func (d *driver) CreateEndpoint(r *network.CreateEndpointRequest) (*network.Crea
 	if !ok {
 		return nil, errFmt("Network %s does not exist", r.NetworkID)
 	}
-	if len(n.endpoints) > 1 {
+	if len(n.Endpoints) > 1 {
 		return nil, errFmt("2 endpoints allready attached to P2P network %s", r.NetworkID)
 	}
 
 	// Find the next available ordinal number for the network
 	ord := uint(0)
-	for _, e := range n.endpoints {
-		ord = (e.ord + 1) % 2
+	for _, e := range n.Endpoints {
+		ord = (e.Ord + 1) % 2
 	}
 
-	Debug("Creating endpoint: %d on p2p%d: (%s, %s)", ord, n.ord, r.EndpointID, n.id)
+	Debug("Creating endpoint: %d on p2p%d: (%s, %s)", ord, n.Ord, r.EndpointID, n.ID)
 
-	n.endpoints[r.EndpointID] = &p2pEndpoint{
-		id:  r.EndpointID,
-		ord: ord,
-		n:   n,
-		i:   r.Interface,
+	e := &p2pEndpoint{
+		ID:  r.EndpointID,
+		Ord: ord,
+		I:   r.Interface,
+	}
+	n.Endpoints[r.EndpointID] = e
+
+	if err := n.saveNetworkState(); err != nil {
+		// XXX What so now we have bad network state?
+		delete(n.Endpoints, r.EndpointID)
+		return nil, errFmt("Saving state for endpoint %s", e.ID)
 	}
 
 	// The response is used to modify the input values, nil for no modification.
@@ -155,14 +168,14 @@ func (d *driver) DeleteEndpoint(r *network.DeleteEndpointRequest) error {
 	if !ok {
 		return errFmt("Network %s does not exist", r.NetworkID)
 	}
-	e, ok := n.endpoints[r.EndpointID]
+	e, ok := n.Endpoints[r.EndpointID]
 	if !ok {
-		return errFmt("Endpoint %s on network %s does not exist", r.EndpointID, n.id)
+		return errFmt("Endpoint %s on network %s does not exist", r.EndpointID, n.ID)
 	}
 
-	Debug("Deleting endpoint %d on p2p%d (%s, %s)", e.ord, n.ord, e.id, n.id)
+	Debug("Deleting endpoint %d on p2p%d (%s, %s)", e.Ord, n.Ord, e.ID, n.ID)
 
-	delete(n.endpoints, e.id)
+	delete(n.Endpoints, e.ID)
 	return nil
 }
 
@@ -200,6 +213,11 @@ func (d *driver) Leave(r *network.LeaveRequest) error {
 //
 // Rest of API unimplemented
 //
+
+func (d *driver) AllocateNetwork(r *network.AllocateNetworkRequest) (*network.AllocateNetworkResponse, error) {
+	Trace("AllocateNetwork(%+v)", r)
+	return nil, nil
+}
 
 func (d *driver) DiscoverDelete(r *network.DiscoveryNotification) error {
 	Trace("DiscoverDelete(%+v)", r)

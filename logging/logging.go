@@ -28,6 +28,8 @@ var traplogger = log.New(os.Stderr, "TRAP: P2P: ", log.Ldate|log.Ltime|log.Lmicr
 var tlogger = log.New(os.Stderr, "TRACE: P2P: ", log.Ldate|log.Ltime|log.Lmicroseconds)
 var dlogger = log.New(os.Stderr, "DEBUG: P2P: ", log.Ldate|log.Ltime|log.Lmicroseconds)
 var logger = log.New(os.Stderr, "INFO: P2P: ", log.Ldate|log.Ltime|log.Lmicroseconds)
+var wlogger = log.New(os.Stderr, "WARNING: P2P: ", log.Ldate|log.Ltime|log.Lmicroseconds)
+var elogger = log.New(os.Stderr, "ERROR: P2P: ", log.Ldate|log.Ltime|log.Lmicroseconds)
 
 var GlbDebug, GlbTrace bool
 
@@ -48,6 +50,16 @@ func Debug(format string, a ...interface{}) {
 // Info logs to the info logger unconditionally.
 func Info(format string, a ...interface{}) {
 	logger.Printf(format, a...)
+}
+
+// Info logs to the info logger unconditionally.
+func Warn(format string, a ...interface{}) {
+	wlogger.Printf(format, a...)
+}
+
+// Info logs to the info logger unconditionally.
+func Err(format string, a ...interface{}) {
+	elogger.Printf(format, a...)
 }
 
 // Trap logs to the trap logger unconditionally.
