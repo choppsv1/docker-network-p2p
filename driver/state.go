@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	. "github.com/choppsv1/p2p-network-driver/logging" // nolint
 	"io/ioutil"
+	"os"
 	"path/filepath"
 )
 
@@ -50,17 +51,17 @@ func (d *driver) loadNetworks() error {
 			Err("Error loading data for network %s: %v", fn, err)
 		}
 
-		Debug("Restored network: %s", n.ID)
+		if err = d.recreateNetwork(n, true); err != nil {
+			return err
+		}
 
-		// XXX assert that we haven't allocated the network yet.
-		d.alloc |= (1 << n.Ord)
-		d.networks[n.ID] = n
+		Debug("Restored network: %s", n.ID)
 	}
 	return nil
 }
 
 func (n *p2pNetwork) saveNetworkState() error {
-	b, err := json.Marshal(n)
+	b, err := json.MarshalIndent(n, "", "  ")
 	if err != nil {
 		Debug("Error marshaling data for network %s: %v", n, err)
 		return err
@@ -82,4 +83,8 @@ func (d *driver) saveState() error {
 		}
 	}
 	return nil
+}
+
+func (n *p2pNetwork) deleteNetworkState() error {
+	return os.Remove(filepath.Join(stateDir, n.ID))
 }

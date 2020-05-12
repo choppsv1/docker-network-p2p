@@ -20,27 +20,30 @@
 package driver
 
 import (
+	"bytes"
 	"fmt"
 	. "github.com/choppsv1/p2p-network-driver/logging" // nolint
 	"github.com/docker/go-plugins-helpers/network"
 	"math/bits"
 	"os"
-	"path/filepath"
+	"os/exec"
+	"strings"
 	"sync"
 )
 
 type bitArray uint
 
 type p2pEndpoint struct {
-	ID  string                     `json:"endpoint-id"`
-	Ord uint                       `json:"ordinal"`
-	I   *network.EndpointInterface `json:"interface,omitempty"`
+	ID         string                     `json:"endpoint-id"`
+	Ord        uint                       `json:"ordinal"`
+	I          *network.EndpointInterface `json:"interface,omitempty"`
+	sandboxKey string
 }
 
 type p2pNetwork struct {
-	ID        string `json:"network-id"`
-	Ord       uint   `json:"ordinal"`
-	Endpoints map[string]*p2pEndpoint
+	ID        string                  `json:"network-id"`
+	Ord       uint                    `json:"ordinal"`
+	Endpoints map[string]*p2pEndpoint `json:"endpoints"`
 }
 
 type driver struct {
@@ -71,6 +74,40 @@ func Init() (*driver, error) {
 	return d, nil
 }
 
+func intfName(netOrd, ifOrd uint) string {
+	return fmt.Sprintf("p2p%d-%d", netOrd, ifOrd)
+}
+
+func runShell(c string) (string, error) {
+	cmd := exec.Command("bash", "-c", c)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return string(stderr.Bytes()), err
+	}
+	return string(stdout.Bytes()), nil
+}
+
+func (d *driver) recreateNetwork(n *p2pNetwork, existsOk bool) error {
+
+	// Create the veth pair
+	c := fmt.Sprintf("ip link add name %s type veth peer name %s", intfName(n.Ord, 0), intfName(n.Ord, 1))
+	output, err := runShell(c)
+	Debug("IP Command %s: %v: %s", c, err, output)
+	if err != nil {
+		if !existsOk || !strings.Contains(output, "RTNETLINK answers: File exists") {
+			return errFmt("Creating veth interface pair for %s: %s", n.ID, output)
+		}
+		Info("Ignoring existing of interfaces on network recreate")
+	}
+
+	d.alloc |= (1 << n.Ord)
+	d.networks[n.ID] = n
+
+	return nil
+}
+
 // Gets called when docker creates a network
 func (d *driver) CreateNetwork(r *network.CreateNetworkRequest) error {
 	Trace("CreateNetwork(%+v)", r)
@@ -96,8 +133,10 @@ func (d *driver) CreateNetwork(r *network.CreateNetworkRequest) error {
 		return errFmt("Saving state for network %s", n.ID)
 	}
 
-	d.alloc |= (1 << ord)
-	d.networks[r.NetworkID] = n
+	if err := d.recreateNetwork(n, false); err != nil {
+		n.deleteNetworkState()
+		return err
+	}
 
 	return nil
 }
@@ -116,10 +155,20 @@ func (d *driver) DeleteNetwork(r *network.DeleteNetworkRequest) error {
 	}
 
 	Debug("Deleting network: p2p%d: %s", n.Ord, n.ID)
+
 	d.alloc &= ^(1 << n.Ord)
 	delete(d.networks, n.ID)
+	n.deleteNetworkState()
 
-	os.Remove(filepath.Join(stateDir, n.ID))
+	// Delete the veth pair
+	c := fmt.Sprintf("ip link del %s", intfName(n.Ord, 0))
+	output, err := runShell(c)
+	if err != nil {
+		Warn("IP Command %s: %v: %s", c, err, output)
+	} else {
+		Debug("IP Command %s: %v: %s", c, err, output)
+	}
+
 	return nil
 }
 
@@ -182,7 +231,16 @@ func (d *driver) DeleteEndpoint(r *network.DeleteEndpointRequest) error {
 // Move the container interface into a namespace
 func (d *driver) Join(r *network.JoinRequest) (*network.JoinResponse, error) {
 	Trace("Join(%+v)", r)
-	return nil, nil
+
+	n, ok := d.networks[r.NetworkID]
+	if !ok {
+		return nil, errFmt("Network %s does not exist", r.NetworkID)
+	}
+
+	var e *p2pEndpoint
+	if e, ok = n.Endpoints[r.EndpointID]; !ok {
+		return nil, errFmt("Endpoint %s does not exist", r.EndpointID)
+	}
 
 	// type JoinRequest struct {
 	// 	NetworkID  string
@@ -192,15 +250,16 @@ func (d *driver) Join(r *network.JoinRequest) (*network.JoinResponse, error) {
 	// }
 	// // InterfaceName consists of the name of the interface in the global netns and
 	// // the desired prefix to be appended to the interface inside the container netns
-	// resp := &network.JoinResponse{
-	// 	InterfaceName: network.InterfaceName{
-	// 		SrcName:   srcName,
-	// 		DstPrefix: dstPrefix,
-	// 	},
-	// 	DisableGatewayService: true,
-	// }
-	// // The response is used to modify the input values, nil for no modification.
-	// return resp, nil
+
+	resp := &network.JoinResponse{
+		InterfaceName: network.InterfaceName{
+			SrcName:   intfName(n.Ord, e.Ord),
+			DstPrefix: "p2p",
+		},
+		DisableGatewayService: true,
+	}
+	// The response is used to modify the input values, nil for no modification.
+	return resp, nil
 
 }
 
