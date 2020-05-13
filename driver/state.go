@@ -21,13 +21,13 @@ package driver
 
 import (
 	"encoding/json"
-	. "github.com/choppsv1/p2p-network-driver/logging" // nolint
+	. "github.com/choppsv1/docker-network-p2p/logging" // nolint
 	"io/ioutil"
 	"os"
 	"path/filepath"
 )
 
-const stateDir = "/etc/docker/p2p-network-driver"
+const stateDir = "/etc/docker/docker-network-p2p"
 const stateGlob = stateDir + "/*"
 
 func loadNetworkState(fn string) (*p2pNetwork, error) {

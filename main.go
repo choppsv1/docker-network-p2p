@@ -20,50 +20,52 @@ package main
 
 import (
 	"flag"
-	"github.com/choppsv1/p2p-network-driver/driver"
-	"github.com/choppsv1/p2p-network-driver/logging"
+	"github.com/choppsv1/docker-network-p2p/driver"
+	"github.com/choppsv1/docker-network-p2p/logging"
 	"github.com/docker/go-plugins-helpers/network"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
 const (
-	version = "0.1.0"
+	version = "1.0.0"
 )
 
-func cleanup() {
-	logging.Info("Exiting due to signal")
+func setupSignalHandler() {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		logging.Info("Exiting due to signal")
+		os.Exit(1)
+	}()
 }
 
 func main() {
+
+	debugEnv, _ := strconv.ParseBool(os.Getenv("DEBUG"))
 	debugPtr := flag.Bool("debug", false, "Enable debug logging")
+	tracePtr := flag.Bool("trace", false, "Enable debug logging")
 	flag.Parse()
 
-	logging.GlbDebug = *debugPtr
-	logging.GlbTrace = *debugPtr
+	logging.GlbDebug = (*debugPtr || debugEnv)
+	logging.GlbTrace = *tracePtr
 
-	logging.Info("Starting p2p network driver version %v", version)
+	setupSignalHandler()
 
+	logging.Info("Initializing p2p network driver: version %v", version)
 	d, err := driver.Init()
 	if err != nil {
 		logging.Panicf("Failed to start driver: %v", err)
 	}
 
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		cleanup()
-		os.Exit(1)
-	}()
-
 	logging.Debug("Registering with docker")
-
 	h := network.NewHandler(d)
 	if err = h.ServeUnix("p2p", 0); err != nil {
 		logging.Panicf("Error during execution: %v", err)
 	}
 
-	logging.Info("Exiting p2p-network-driver driver")
+	logging.Info("Exiting p2p network driver")
 }

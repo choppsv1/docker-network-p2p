@@ -21,8 +21,9 @@ package driver
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	. "github.com/choppsv1/p2p-network-driver/logging" // nolint
+	. "github.com/choppsv1/docker-network-p2p/logging" // nolint
 	"github.com/docker/go-plugins-helpers/network"
 	"math/bits"
 	"os"
@@ -251,7 +252,7 @@ func (d *driver) Join(r *network.JoinRequest) (*network.JoinResponse, error) {
 	// // InterfaceName consists of the name of the interface in the global netns and
 	// // the desired prefix to be appended to the interface inside the container netns
 
-	resp := &network.JoinResponse{
+	res := &network.JoinResponse{
 		InterfaceName: network.InterfaceName{
 			SrcName:   intfName(n.Ord, e.Ord),
 			DstPrefix: "p2p",
@@ -259,7 +260,7 @@ func (d *driver) Join(r *network.JoinRequest) (*network.JoinResponse, error) {
 		DisableGatewayService: true,
 	}
 	// The response is used to modify the input values, nil for no modification.
-	return resp, nil
+	return res, nil
 
 }
 
@@ -290,7 +291,24 @@ func (d *driver) DiscoverNew(r *network.DiscoveryNotification) error {
 
 func (d *driver) EndpointInfo(r *network.InfoRequest) (*network.InfoResponse, error) {
 	Trace("EndpointInfo(%+v)", r)
-	return nil, nil
+
+	n, ok := d.networks[r.NetworkID]
+	if !ok {
+		return nil, errFmt("Network %s does not exist", r.NetworkID)
+	}
+
+	var e *p2pEndpoint
+	if e, ok = n.Endpoints[r.EndpointID]; !ok {
+		return nil, errFmt("Endpoint %s does not exist", r.EndpointID)
+	}
+
+	b, err := json.Marshal(e)
+	if err != nil {
+		return nil, errFmt("Marshall of endpoint %s failed: %v", r.EndpointID, err)
+	}
+	res := &network.InfoResponse{make(map[string]string)}
+	res.Value["data"] = string(b)
+	return res, nil
 }
 
 func (d *driver) FreeNetwork(r *network.FreeNetworkRequest) error {

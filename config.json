@@ -1,0 +1,24 @@
+{
+  "description": "p2p network driver plugin for docker",
+  "documentation": "https://github.com/choppsv1/docker-network-p2p",
+  "entrypoint": ["/docker-network-p2p"],
+  "env": [
+    {
+      "name": "DEBUG",
+      "settable": [
+        "value"
+      ],
+      "value": "0"
+    }
+  ],
+  "network": {
+    "type": "host"
+  },
+  "interface": {
+    "types": ["docker.networkdriver/1.0"],
+    "socket": "p2p.sock"
+  },
+  "linux": {
+    "capabilities": ["CAP_NET_ADMIN"]
+  }
+}
