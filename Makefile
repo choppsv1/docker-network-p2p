@@ -1,9 +1,10 @@
 # Derived this from Makefile in https://github.com/vieux/docker-volume-sshfs
 # which is MIT licensed.
-PLUGIN_NAME = choppsv1/docker-network-p2p
-PLUGIN_TAG ?= 1.0
+DOCKER_REPO ?= choppsv1/docker-network-p2p
+DOCKER_TAG ?= latest
+IMAGE_NAME ?= ${DOCKER_REPO}:${DOCKER_TAG}
 
-SOURCES=main.go $(wildcard */*.go)
+SOURCES := main.go $(wildcard */*.go)
 
 all: clean create
 
@@ -12,19 +13,22 @@ clean:
 
 # Build the image, then extract into a "rootfs" for docker plugin
 plugin/rootfs/docker-network-p2p: $(SOURCES)
-	docker build -q -t ${PLUGIN_NAME}:rootfs .
-	docker create --name tmp ${PLUGIN_NAME}:rootfs
+	docker build -q -t $(DOCKER_REPO):rootfs .
+	docker create --name tmp $(DOCKER_REPO):rootfs
 	mkdir -p ./plugin/rootfs
 	docker export tmp | tar -x -C ./plugin/rootfs
 	cp config.json ./plugin/
 	docker rm -vf tmp
 
 create: plugin/rootfs/docker-network-p2p
-	docker plugin rm -f ${PLUGIN_NAME}:${PLUGIN_TAG} || true
-	docker plugin create ${PLUGIN_NAME}:${PLUGIN_TAG} ./plugin
+	docker plugin rm -f $(IMAGE_NAME) || true
+	docker plugin create $(IMAGE_NAME) ./plugin
 
 enable:
-	docker plugin enable ${PLUGIN_NAME}:${PLUGIN_TAG}
+	docker plugin enable $(IMAGE_NAME)
 
-push:  clean create
-	docker plugin push ${PLUGIN_NAME}:${PLUGIN_TAG}
+push:
+	docker plugin push $(IMAGE_NAME)
+
+test:
+	hooks/test
