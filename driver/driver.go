@@ -249,7 +249,7 @@ func (d *driver) Join(r *network.JoinRequest) (*network.JoinResponse, error) {
 	res := &network.JoinResponse{
 		InterfaceName: network.InterfaceName{
 			SrcName:   intfName(n.Ord, e.Ord),
-			DstPrefix: "p2p",
+			DstPrefix: "eth",
 		},
 		DisableGatewayService: true,
 	}
