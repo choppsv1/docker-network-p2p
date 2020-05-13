@@ -29,9 +29,7 @@ import (
 	"syscall"
 )
 
-const (
-	version = "1.0.0"
-)
+var Version = "unset"
 
 func setupSignalHandler() {
 	c := make(chan os.Signal)
@@ -55,7 +53,7 @@ func main() {
 
 	setupSignalHandler()
 
-	logging.Info("Initializing p2p network driver: version %v", version)
+	logging.Info("Initializing p2p network driver: version %v", Version)
 	d, err := driver.Init()
 	if err != nil {
 		logging.Panicf("Failed to start driver: %v", err)

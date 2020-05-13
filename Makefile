@@ -5,6 +5,10 @@ DOCKER_TAG ?= latest
 IMAGE_NAME ?= ${DOCKER_REPO}:${DOCKER_TAG}
 
 SOURCES := main.go $(wildcard */*.go)
+VERSION ?= $(shell k
+
+TAG_COMMIT := $(shell git rev-list --abbrev-commit --tags --max-count=1)
+TAG := $(shell git describe --abbrev=0 --tags ${TAG_COMMIT} 2>/dev/null || true)
 
 all: clean create
 
@@ -13,7 +17,7 @@ clean:
 
 # Build the image, then extract into a "rootfs" for docker plugin
 plugin/rootfs/docker-network-p2p: $(SOURCES)
-	docker build -q -t $(DOCKER_REPO):rootfs .
+	docker build -q --build-arg=VERSION=$(VERSION) -t $(DOCKER_REPO):rootfs .
 	docker create --name tmp $(DOCKER_REPO):rootfs
 	mkdir -p ./plugin/rootfs
 	docker export tmp | tar -x -C ./plugin/rootfs
