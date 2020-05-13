@@ -80,7 +80,7 @@ func intfName(netOrd, ifOrd uint) string {
 }
 
 func runShell(c string) (string, error) {
-	cmd := exec.Command("bash", "-c", c)
+	cmd := exec.Command("sh", "-c", c)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

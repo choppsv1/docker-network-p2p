@@ -50,7 +50,7 @@ func main() {
 	tracePtr := flag.Bool("trace", false, "Enable debug logging")
 	flag.Parse()
 
-	logging.GlbDebug = (*debugPtr || debugEnv)
+	logging.GlbDebug = true || (*debugPtr || debugEnv)
 	logging.GlbTrace = *tracePtr
 
 	setupSignalHandler()
