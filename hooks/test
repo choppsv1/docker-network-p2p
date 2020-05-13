@@ -19,9 +19,14 @@
 
 set -ex
 
+IMAGE_NAME=${IMAGE_NAME:-choppsv1/docker-network-p2p:latest}
+
+# I dont think we should have to push here to test :( but the docker network
+# create fails b/c it can't find the just enabled image in the registry
+docker plugin push ${IMAGE_NAME} || true
 docker plugin enable ${IMAGE_NAME} || true
 docker network rm testnet || true
-docker network create --driver=""${IMAGE_NAME}"" testnet
+docker network create --driver="${IMAGE_NAME}" testnet
 docker run --rm --name dut1 --network=testnet alpine sleep 60 &
 pid=$!
 for ((i=0; i<10; i++)); do
