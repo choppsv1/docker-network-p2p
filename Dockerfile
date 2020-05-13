@@ -1,5 +1,6 @@
 FROM golang:1.14.2 as build
-RUN go get github.com/docker/go-plugins-helpers/network
+RUN go get github.com/docker/go-plugins-helpers/network && \
+    go get github.com/vishvananda/netlink
 WORKDIR /go/src/github.com/choppsv1/docker-network-p2p
 COPY . .
 ARG VERSION=development

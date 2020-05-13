@@ -20,16 +20,15 @@
 package driver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	. "github.com/choppsv1/docker-network-p2p/logging" // nolint
 	"github.com/docker/go-plugins-helpers/network"
+	"github.com/vishvananda/netlink"
 	"math/bits"
 	"os"
-	"os/exec"
-	"strings"
 	"sync"
+	"syscall"
 )
 
 type bitArray uint
@@ -79,26 +78,19 @@ func intfName(netOrd, ifOrd uint) string {
 	return fmt.Sprintf("p2p%d-%d", netOrd, ifOrd)
 }
 
-func runShell(c string) (string, error) {
-	cmd := exec.Command("sh", "-c", c)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return string(stderr.Bytes()), err
-	}
-	return string(stdout.Bytes()), nil
-}
-
 func (d *driver) recreateNetwork(n *p2pNetwork, existsOk bool) error {
-
 	// Create the veth pair
-	c := fmt.Sprintf("ip link add name %s type veth peer name %s", intfName(n.Ord, 0), intfName(n.Ord, 1))
-	output, err := runShell(c)
-	Debug("IP Command %s: %v: %s", c, err, output)
-	if err != nil {
-		if !existsOk || !strings.Contains(output, "RTNETLINK answers: File exists") {
-			return errFmt("Creating veth interface pair for %s: %s", n.ID, output)
+	a := &netlink.Veth{
+		LinkAttrs: netlink.LinkAttrs{
+			Name: intfName(n.Ord, 0),
+		},
+
+		PeerName: intfName(n.Ord, 1),
+	}
+	if err := netlink.LinkAdd(a); err != nil {
+		if !existsOk || err != syscall.EEXIST {
+			Debug("Error creating veth interface pair for %s: %v", n.ID, err)
+			return errFmt("Creating veth interface pair for %s: %v", n.ID, err)
 		}
 		Info("Ignoring existing of interfaces on network recreate")
 	}
@@ -162,14 +154,16 @@ func (d *driver) DeleteNetwork(r *network.DeleteNetworkRequest) error {
 	n.deleteNetworkState()
 
 	// Delete the veth pair
-	c := fmt.Sprintf("ip link del %s", intfName(n.Ord, 0))
-	output, err := runShell(c)
-	if err != nil {
-		Warn("IP Command %s: %v: %s", c, err, output)
-	} else {
-		Debug("IP Command %s: %v: %s", c, err, output)
-	}
+	a := &netlink.Veth{
+		LinkAttrs: netlink.LinkAttrs{
+			Name: intfName(n.Ord, 0),
+		},
 
+		PeerName: intfName(n.Ord, 1),
+	}
+	if err := netlink.LinkDel(a); err != nil {
+		return errFmt("Removing veth interface pair for %s: %v", n.ID, err)
+	}
 	return nil
 }
 
