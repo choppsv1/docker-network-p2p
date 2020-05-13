@@ -19,11 +19,16 @@
 
 set -ex
 
+# Unforunately this does not work in docker.io b/c
+#
+# docker network create --driver=index.docker.io/choppsv1/docker-network-p2p:latest testnet
+# Error response from daemon: could not resolve driver index.docker.io/choppsv1/docker-network-p2p:latest in registry
+if [[ -n "$SOURCE_COMMIT" ]]; then
+   exit 0
+fi
+
 IMAGE_NAME=${IMAGE_NAME:-choppsv1/docker-network-p2p:latest}
 
-# I dont think we should have to push here to test :( but the docker network
-# create fails b/c it can't find the just enabled image in the registry
-docker plugin push ${IMAGE_NAME} || true
 docker plugin enable ${IMAGE_NAME} || true
 docker network rm testnet || true
 docker network create --driver="${IMAGE_NAME}" testnet
