@@ -4,6 +4,12 @@ For efficient container-to-container networking a simple non-bridged veth pair
 is sufficient. This docker network driver implements a point-to-point network
 using a veth pair.
 
+## Install
+
+```
+docker plugin install choppsv1/docker-network-p2p 
+```
+
 ## Usage
 
 To use with docker
@@ -29,7 +35,7 @@ services:
 
 networks:
   p2pnet:
-    driver: "choppsv1/docker-network-p2p"
+    driver: "choppsv1/docker-network-p2p:latest"
 ```
 
 # License
