@@ -26,5 +26,5 @@ create: plugin/rootfs/docker-network-p2p
 enable:
 	docker plugin enable ${PLUGIN_NAME}:${PLUGIN_TAG}
 
-push:  clean create enable
+push:  clean create
 	docker plugin push ${PLUGIN_NAME}:${PLUGIN_TAG}

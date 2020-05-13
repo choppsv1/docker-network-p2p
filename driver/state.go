@@ -27,7 +27,7 @@ import (
 	"path/filepath"
 )
 
-const stateDir = "/etc/docker/docker-network-p2p"
+const stateDir = "/var/lib/docker/plugins/docker-network-p2p"
 const stateGlob = stateDir + "/*"
 
 func loadNetworkState(fn string) (*p2pNetwork, error) {

@@ -11,14 +11,28 @@
       "value": "0"
     }
   ],
-  "network": {
-    "type": "host"
-  },
   "interface": {
     "types": ["docker.networkdriver/1.0"],
     "socket": "p2p.sock"
   },
   "linux": {
     "capabilities": ["CAP_NET_ADMIN"]
+  },
+  "mounts": [
+    {
+      "destination": "/var/lib/docker/plugins",
+      "options": [
+        "rbind"
+      ],
+      "name": "state",
+      "source": "/var/lib/docker/plugins/",
+      "settable": [
+        "source"
+      ],
+      "type": "bind"
+    }
+  ],
+  "network": {
+    "type": "host"
   }
 }
