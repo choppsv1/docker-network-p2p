@@ -1,14 +1,14 @@
 # Derived this from Makefile in https://github.com/vieux/docker-volume-sshfs
 # which is MIT licensed.
+VERSION ?= $(shell .gitver.sh)
 DOCKER_REPO ?= choppsv1/docker-network-p2p
 DOCKER_TAG ?= latest
 IMAGE_NAME ?= ${DOCKER_REPO}:${DOCKER_TAG}
 
-SOURCES := main.go $(wildcard */*.go)
-VERSION ?= $(shell k
+# Fix the versio number to not have a "v" prefix
+VERSION := $(VERSION:v%=%)
 
-TAG_COMMIT := $(shell git rev-list --abbrev-commit --tags --max-count=1)
-TAG := $(shell git describe --abbrev=0 --tags ${TAG_COMMIT} 2>/dev/null || true)
+SOURCES := main.go $(wildcard */*.go)
 
 all: clean create
 
